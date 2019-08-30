@@ -1,6 +1,5 @@
 import torch 
 import torch.nn as nn 
-import kinematics_optim 
 from models import *
 import matplotlib.pyplot as plt 
 import time 
@@ -8,6 +7,9 @@ import numpy as np
 import torchvision.models as tmodels
 from torchvision import transforms
 import kinfwd_optim
+import scipy 
+import kinadj_optim
+import kinfwdadj_optim
 # torchvision models: https://pytorch.org/docs/stable/torchvision/models.html
 # tutorial with models: https://www.learnopencv.com/pytorch-for-beginners-image-classification-using-pre-trained-models/
 
@@ -23,11 +25,11 @@ class DataLoader:
         self.supported_datasets = dir(torchvision.datasets)
         self.supported_losses = ['CrossEntropyLoss']
         self.supported_models = ['NN', 'Conv', 'AlexNet'] + list(dir(torchvision.models))
-        self.supported_optims = ['Kinematics', 'SGD', 'Adam'] #, 'RMSprop', 'Adadelta', 'Adagrad', 'Adamax', 'AdamW']
+        self.supported_optims = ['KinFwdAdj', 'Kinematics', 'Adam'] #, 'SGD'] #, 'RMSprop', 'Adadelta', 'Adagrad', 'Adamax', 'AdamW']
         # Universal settings 
         self.num_epochs = 1
-        self.batch_size = 128 #5000
-        self.shuffle_train = True
+        self.batch_size = 1000 #5000
+        self.shuffle_train = False
         self.num_trials = 30
         self.print_every = 10
 
@@ -53,6 +55,7 @@ class DataLoader:
         self.loss_name = loss_name
         # Plotting objects 
         self.training_loss = []
+        self.val_acc = [] # for plotting val acc throughout training 
         self.test_accuracy = None 
         self.training_dict = {}
         self.testing_dict = {}
@@ -85,6 +88,8 @@ class DataLoader:
             self.model = AlexNet100().to(self.device)
         elif model_name == 'resnet18':
             self.model = tmodels.resnet18().to(self.device)
+        elif model_name == 'resnet50':
+            self.model = tmodels.resnet50().to(self.device)
         elif model_name == 'Linear':
             self.model = nn.Linear(self.input_size, self.num_classes)
         else:
@@ -97,6 +102,10 @@ class DataLoader:
         elif opt_name == 'Kinematics':
             #self.optimizer = kinematics_optim.Kinematics(self.model.parameters())
             self.optimizer = kinfwd_optim.KinFwd(self.model.parameters())
+        elif opt_name == 'KinAdj':
+            self.optimizer = kinadj_optim.KinAdj(self.model.parameters())
+        elif opt_name == 'KinFwdAdj':
+            self.optimizer = kinfwdadj_optim.KinFwdAdj(self.model.parameters())
         elif opt_name == 'Adadelta':
             self.optimizer = torch.optim.Adadelta(self.model.parameters())
         elif opt_name == 'Adagrad':
@@ -257,27 +266,31 @@ class DataLoader:
 
                 loss = closure()
                 self.training_loss.append(float(loss.item()))
+                self.val_acc.append(float(self.test()))
                 
                 # Backward and optimize
                 self.optimizer.zero_grad()
                 loss.backward()
 
-                if self.opt_name == 'Kinematics':
+                if self.opt_name == 'Kinematics' or self.opt_name == 'KinFwdAdj':
                     # print("Pre: ", closure().item())
                     # torch.save(self.model.state_dict(), "./model_save")
                     self.optimizer.step(closure, self.model)
                     #self.model.load_state_dict(old_model_state_dict)
                     # self.model.load_state_dict(torch.load("./model_save"))
                     # print("Post: ", closure().item())
+                elif self.opt_name == 'KinAdj':
+                    self.optimizer.step(closure)
                 else:
                     self.optimizer.step()
 
                 if (i+1) % self.print_every == 0:
-                    print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}' 
-                           .format(epoch+1, self.num_epochs, i+1, total_step, loss.item())) 
+                    print ('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}, Val: {}' 
+                           .format(epoch+1, self.num_epochs, i+1, total_step, loss.item(), self.test(verbose = True))) 
+                    
                 # print("POST-STEP LOSS: ", loss.item())
 
-    def test(self):
+    def test(self, verbose = False):
         # Test the model
         # In test phase, we don't need to compute gradients (for memory efficiency)
         with torch.no_grad():
@@ -300,18 +313,33 @@ class DataLoader:
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
             self.test_accuracy = 100 * correct / total
-            print('Accuracy of the network on the 10000 test images: {} %'.format(self.test_accuracy))
+            if verbose:
+                print('Accuracy of the network on the 10000 test images: {} %'.format(self.test_accuracy))
+        return self.test_accuracy
 
     def plotTrain(self):
         """Plot the training loss against iterations
         """
         if not self.training_loss:
             self.train()
-            self.test()
+            # self.test()
         assert(self.training_loss)
         plt.plot(self.training_loss)
         plt.title("Training Loss of {} on {} ({} model)".format(self.opt_name, self.dataset_name, self.model_name))
         plt.ylabel("{}".format(self.loss_name))
+        plt.xlabel("Iterations ({} epochs of {} batch size)".format(self.num_epochs, self.batch_size))
+        plt.show()
+
+    def plotTest(self):
+        """Plot the validation accuracy against iterations
+        """
+        if not self.val_acc:
+            self.train()
+            # self.test()
+        assert(self.val_acc)
+        plt.plot(self.val_acc)
+        plt.title("Val Accuracy of {} on {} ({} model)".format(self.opt_name, self.dataset_name, self.model_name))
+        plt.ylabel("Accuracy %")
         plt.xlabel("Iterations ({} epochs of {} batch size)".format(self.num_epochs, self.batch_size))
         plt.show()
 
@@ -338,19 +366,21 @@ class DataLoader:
             self.test()
             # record train and test results 
             training_dict[opt] = self.training_loss
-            testing_dict[opt] = self.test_accuracy
+            testing_dict[opt] = self.val_acc
             time_dict[opt] = end - start
         # record final results 
         self.training_dict = training_dict
         self.testing_dict = testing_dict
         self.time_dict = time_dict
 
-    def plotMultitrain(self):
+    def plotMultitrain(self, loss_fig = None, val_fig = None):
         """Plots multitrain results
+            loss_fig / val_fig for saving file name
         """
         if not self.training_dict:
             self.multitrain()
         assert(self.training_dict)
+        assert(self.testing_dict)
 
         # plot losses
         plt.title("Comparative Loss on {} ({} model)".format(self.dataset_name, self.model_name))
@@ -361,7 +391,29 @@ class DataLoader:
         plt.legend(legend)
         plt.ylabel("{}".format(self.loss_name))
         plt.xlabel("Iterations (epochs: {}, batch size: {})".format(self.num_epochs, self.batch_size))
-        plt.show()
+        
+        if loss_fig is None:
+            plt.show()
+        else:
+            print("Saved loss figure at {}".format(loss_fig))
+            plt.savefig(loss_fig)
+
+
+        # plot val acc
+        plt.title("Comparative Val Acc on {} ({} model)".format(self.dataset_name, self.model_name))
+        legend = []
+        for opt, val in self.testing_dict.items():
+            plt.plot(val)
+            legend.append(opt)
+        plt.legend(legend)
+        plt.ylabel("Accuracy %")
+        plt.xlabel("Iterations (epochs: {}, batch size: {})".format(self.num_epochs, self.batch_size))
+
+        if val_fig is None:
+            plt.show()
+        else:
+            print("Saved val figure at {}".format(val_fig))
+            plt.savefig(val_fig)
 
 
 
@@ -369,6 +421,12 @@ class DataLoader:
 
 
 if __name__ == "__main__":
-    
-    dl = DataLoader("CIFAR10", "Conv", "Kinematics")
+    dname, mname, oname = 'CIFAR10', 'resnet18', 'KinFwdAdj'
+    # print("START {} {} {}".format(dname, mname, oname))
+    # dl = DataLoader(dname, mname, oname)
+    # # dl.plotMultitrain()
+    loss_fig_name = './figures/{}_{}_{}.png'.format(oname, mname, dname)
+    val_fig_name = './figures/Val_{}_{}_{}.png'.format(oname, mname, dname)
+    dl = DataLoader(dname, mname, oname)
+    # dl.plotMultitrain(loss_fig_name, val_fig_name)
     dl.plotMultitrain()

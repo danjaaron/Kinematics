@@ -16,7 +16,7 @@ class KinFwd(Optimizer):
         super(KinFwd, self).__init__(params, defaults = dict())
 
         # settings 
-        self.g = 9.81
+        self.g = 9.8
         self.grad_dict = {} 
         self.params = params
         
