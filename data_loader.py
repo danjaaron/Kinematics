@@ -8,8 +8,6 @@ import torchvision.models as tmodels
 from torchvision import transforms
 import kinfwd_optim
 import scipy 
-import kinadj_optim
-import kinfwdadj_optim
 # torchvision models: https://pytorch.org/docs/stable/torchvision/models.html
 # tutorial with models: https://www.learnopencv.com/pytorch-for-beginners-image-classification-using-pre-trained-models/
 
