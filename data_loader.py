@@ -7,6 +7,7 @@ import numpy as np
 import torchvision.models as tmodels
 from torchvision import transforms
 import kinfwd_optim
+import kinfwdadj_optim
 import scipy 
 # torchvision models: https://pytorch.org/docs/stable/torchvision/models.html
 # tutorial with models: https://www.learnopencv.com/pytorch-for-beginners-image-classification-using-pre-trained-models/
@@ -23,7 +24,7 @@ class DataLoader:
         self.supported_datasets = dir(torchvision.datasets)
         self.supported_losses = ['CrossEntropyLoss']
         self.supported_models = ['NN', 'Conv', 'AlexNet'] + list(dir(torchvision.models))
-        self.supported_optims = ['KinFwdAdj', 'Kinematics', 'Adam'] #, 'SGD'] #, 'RMSprop', 'Adadelta', 'Adagrad', 'Adamax', 'AdamW']
+        self.supported_optims = ['Adam'] #, 'SGD'] #, 'RMSprop', 'Adadelta', 'Adagrad', 'Adamax', 'AdamW']
         # Universal settings 
         self.num_epochs = 1
         self.batch_size = 1000 #5000
@@ -419,7 +420,7 @@ class DataLoader:
 
 
 if __name__ == "__main__":
-    dname, mname, oname = 'CIFAR10', 'resnet18', 'KinFwdAdj'
+    dname, mname, oname = 'MNIST', 'Linear', 'Adam'
     # print("START {} {} {}".format(dname, mname, oname))
     # dl = DataLoader(dname, mname, oname)
     # # dl.plotMultitrain()
