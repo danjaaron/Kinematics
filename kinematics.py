@@ -3,20 +3,21 @@ from torch.optim import Optimizer
 import numpy as np 
 import math 
 
-class KinFwdAdj(Optimizer):
+class KinFwd(Optimizer):
     """
     Implements kinematics optimization method with forward collisions 
-    and momentum conservation, with adjustment of g accel (self.g is no longer a hyperparam)
+    and momentum conservation. 
     """
 
     def __setstate__(self, state):
-        super(KinFwdAdj, self).__setstate__(state)
+        super(KinFwd, self).__setstate__(state)
 
     def __init__(self, params):
-        super(KinFwdAdj, self).__init__(params, defaults = dict())
+        default_dict = {'g': 9.8}
+        super(KinFwd, self).__init__(params, defaults = default_dict)
 
         # settings 
-        self.g = 1.0
+        self.g = default_dict['g']
         self.grad_dict = {} 
         self.params = params
         
@@ -34,7 +35,7 @@ class KinFwdAdj(Optimizer):
         """
         Computes downward velocity at time of impact (loss = 0).
         """
-        uf = math.sqrt(2.0*abs(self.g)*abs(start_height))
+        uf = math.sqrt(2.0*abs(self.g)*abs(start_height)) 
         return uf
         
     def step(self, closure, model):
@@ -46,7 +47,7 @@ class KinFwdAdj(Optimizer):
         """
 
         # save model 
-        torch.save(model.state_dict(), "./model_save")
+        torch.save(model.state_dict(), "./kin_save")
 
         # get norm of total old gradient 
         old_grad_tens = torch.Tensor().to('cuda')
@@ -114,15 +115,12 @@ class KinFwdAdj(Optimizer):
 
         new_h = float(closure().item())
 
-        # update self.g
-        self.g = float(torch.norm(new_grad_tens - old_grad_tens, p = 2).item())/t_impact
-        adjusted_vf = self.get_final_velocity(start_height = (old_h + old_h - new_h))
+        # adjust initial time of flight (lands at new_h, not 0)
+        adjusted_vf = self.get_final_velocity(start_height = (old_h + old_h - new_h)) # adjust height either (old_h + new_h) or (old_h + (old_h - new_h))
         t_impact = self.time_of_impact(adjusted_vf)
 
-        # print(self.g)
-
         # restore model 
-        model.load_state_dict(torch.load("./model_save"))
+        model.load_state_dict(torch.load("./kin_save"))
 
         # choose averaged initial velocity 
         group_index = 0
@@ -140,5 +138,10 @@ class KinFwdAdj(Optimizer):
             group_index += 1
 
         final_h = closure().item()
+
+        if final_h > old_h:
+            print("PROB: FINAL H > OLD H")
+            print("norm: old {}, new {}".format(old_grad_norm, new_grad_norm))
+            print("loss: old {} new {} final {}".format(old_h, new_h, final_h))
 
         return loss
