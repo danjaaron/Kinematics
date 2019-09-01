@@ -1,6 +1,6 @@
 """
 Xtrainer.py -- cross-trains multiple optimization algorithms in parallel (on a single model type) for comparative results
-*** investigate past (psuedo-)parallel hyper-param tuning 
+    *** implement and investigate past (psuedo-)parallel hyper-param tuning 
 """
 
 import torch, torchvision, time, inspect, kinematics, pickle
@@ -48,7 +48,7 @@ class XTrainer:
                 target = target.to(self.device)
 
                 # iterate over optimizers and models
-                for opt_ind in range(len(optimizer_list)):
+                for opt_ind in range(len(self.optimizer_list)):
                     # select opt and model
                     self.optimizer = self.optimizer_list[opt_ind]
                     self.model = self.model_list[opt_ind]
