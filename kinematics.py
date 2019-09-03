@@ -139,9 +139,4 @@ class KinFwd(Optimizer):
 
         final_h = closure().item()
 
-        if final_h > old_h:
-            print("PROB: FINAL H > OLD H")
-            print("norm: old {}, new {}".format(old_grad_norm, new_grad_norm))
-            print("loss: old {} new {} final {}".format(old_h, new_h, final_h))
-
         return loss

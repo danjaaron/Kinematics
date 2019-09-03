@@ -7,7 +7,7 @@ from xtrainer import *
 import numpy as np
 
 if __name__ == '__main__':
-
+    torch.cuda.empty_cache()
     results_path = './hypertune_results/'
     
 
@@ -15,14 +15,14 @@ if __name__ == '__main__':
         "batch_size": 1000,
         "num_epochs": 1,
         "shuffle_train": True,
-        "flatten_dim": 784,
+        "flatten_dim": None,
         "num_classes": 10,
-        "dataset": 'MNIST',
-        "model": 'Linear',
+        "dataset": 'CIFAR10',
+        "model": 'resnet18',
         "loss": 'CrossEntropyLoss',
         "optimizers": ['KinFwd'],
         "tune_param": 'g',
-        "tune_range": list(np.arange(1.0, 100.1, 0.1))
+        "tune_range": list(np.arange(31.0, 100.1, 1.0))
     }
 
     # init datasets
@@ -81,6 +81,9 @@ if __name__ == '__main__':
         setattr(opt_obj, param_to_tune, tune_value)
         # add tuned optimizer to list
         optimizer_list.append(opt_obj)
+
+    print('initialized successfully')
+    print(settings_dict)
 
     # init trainer 
     xTrainer = XTrainer(model_list, criterion, optimizer_list, optimizer_names, train_loader, test_loader, flatten_dim = settings_dict['flatten_dim'], num_epochs = settings_dict['num_epochs'])
