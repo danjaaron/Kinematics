@@ -126,7 +126,7 @@ if __name__ == '__main__':
         "dataset": dataset_arg,
         "model": model_arg,
         "loss": 'CrossEntropyLoss',
-        "optimizers": ['Adam', 'KinFwd'] #, 'Adadelta', 'RMSprop'] 
+        "optimizers": ['Adam', 'KinFwd', 'LBFGS'] #, 'Adadelta', 'RMSprop'] 
 
     }
 
@@ -135,8 +135,6 @@ if __name__ == '__main__':
             settings_dict['flatten_dim'] = 784
         elif dataset_arg == 'CIFAR10':
             settings_dict['flatten_dim'] = 3072
-        else:
-            raise NotImplementedError
         settings_dict['num_classes']
     else:
         settings_dict['flatten_dim'] = None
