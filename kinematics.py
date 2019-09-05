@@ -1,7 +1,7 @@
 import torch
 from torch.optim import Optimizer
 import numpy as np 
-import math 
+import math, time
 
 class KinFwd(Optimizer):
     """
@@ -20,6 +20,7 @@ class KinFwd(Optimizer):
         self.g = default_dict['g']
         self.grad_dict = {} 
         self.params = params
+        self.model_save_name = './'+str(round(time.time()))
         
 
     def time_of_impact(self, uf_in):
@@ -45,9 +46,8 @@ class KinFwd(Optimizer):
         Arguments:
             loss (req): PyTorch loss Tensor at each step 
         """
-
         # save model 
-        torch.save(model.state_dict(), "./kin_save")
+        torch.save(model.state_dict(), self.model_save_name)
 
         # get norm of total old gradient 
         old_grad_tens = torch.Tensor().to('cuda')
@@ -120,7 +120,7 @@ class KinFwd(Optimizer):
         t_impact = self.time_of_impact(adjusted_vf)
 
         # restore model 
-        model.load_state_dict(torch.load("./kin_save"))
+        model.load_state_dict(torch.load(self.model_save_name))
 
         # choose averaged initial velocity 
         group_index = 0

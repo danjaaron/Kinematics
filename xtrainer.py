@@ -5,7 +5,7 @@ Xtrainer.py -- cross-trains multiple optimization algorithms in parallel (on a s
 
 import torch, torchvision, time, inspect, kinematics, pickle
 from torchvision import transforms
-
+import sys 
 class XTrainer:
     """ Cross-trains EVERY optimization algorithm on the specific model type
     """
@@ -79,6 +79,7 @@ class XTrainer:
                     # make a minidict for printing
                     train_printdict = {self.optimizer_names[k]: v[-1] for k, v in self.train_results.items()}
                     test_printdict = {self.optimizer_names[k]: v[-1] for k, v in self.test_results.items()}
+                    print(self.optimizer_names)
                     print ('Epoch [{}/{}], Step [{}/{}], Loss: '.format(epoch+1, self.num_epochs, i+1, total_step) + str(train_printdict) + ', Val: ' + str(test_printdict))
                            
         return self.train_results, self.test_results
@@ -113,18 +114,34 @@ if __name__ == '__main__':
             ... will need to change filename saving, etc.
     """
 
+    # get command line args 
+    model_arg, dataset_arg = sys.argv[1:]
+
     settings_dict = {
-        "batch_size": 1000,
+        "batch_size": 128,
         "num_epochs": 1,
         "shuffle_train": True,
-        "flatten_dim": 784,
+        "flatten_dim": 3072,
         "num_classes": 10,
-        "dataset": 'MNIST',
-        "model": 'Linear',
+        "dataset": dataset_arg,
+        "model": model_arg,
         "loss": 'CrossEntropyLoss',
         "optimizers": ['Adam', 'KinFwd'] #, 'Adadelta', 'RMSprop'] 
 
     }
+
+    if model_arg == 'Linear':
+        if dataset_arg == 'MNIST':
+            settings_dict['flatten_dim'] = 784
+        elif dataset_arg == 'CIFAR10':
+            settings_dict['flatten_dim'] = 3072
+        else:
+            raise NotImplementedError
+        settings_dict['num_classes']
+    else:
+        settings_dict['flatten_dim'] = None
+
+    print(settings_dict)
 
     # init datasets
     train_dataset = getattr(torchvision.datasets, settings_dict['dataset'])(root='../../data', 
