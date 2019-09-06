@@ -3,18 +3,20 @@ from torch.optim import Optimizer
 import numpy as np 
 import math, time
 
-class KinFwd(Optimizer):
+class Kinematics(Optimizer):
     """
     Implements kinematics optimization method with forward collisions 
     and momentum conservation. 
+
+    Uses EMA to adjust g adaptively 
     """
 
     def __setstate__(self, state):
-        super(KinFwd, self).__setstate__(state)
+        super(Kinematics, self).__setstate__(state)
 
     def __init__(self, params):
         default_dict = {'g': 9.8}
-        super(KinFwd, self).__init__(params, defaults = default_dict)
+        super(Kinematics, self).__init__(params, defaults = default_dict)
 
         # settings 
         self.g = default_dict['g']
