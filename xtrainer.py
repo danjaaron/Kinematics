@@ -3,14 +3,17 @@ Xtrainer.py -- cross-trains multiple optimization algorithms in parallel (on a s
     *** implement and investigate past (psuedo-)parallel hyper-param tuning 
 """
 
-import torch, torchvision, time, inspect, kinematics, pickle
+import torch, torchvision, time, inspect, pickle
 from torchvision import transforms
 import sys 
+
+
 class XTrainer:
     """ Cross-trains EVERY optimization algorithm on the specific model type
     """
-    def __init__(self, model_list, loss_criterion, optimizer_list, optimizer_names, train_loader, test_loader, num_epochs = 1, flatten_dim = None):
+    def __init__(self, settings, model_list, loss_criterion, optimizer_list, optimizer_names, train_loader, test_loader, num_epochs = 1, flatten_dim = None):
         # global settings 
+        self.settings = settings
         self.flatten_dim = flatten_dim
         self.num_epochs = num_epochs
         self.optimizer_names = optimizer_names
@@ -80,6 +83,7 @@ class XTrainer:
                     train_printdict = {self.optimizer_names[k]: v[-1] for k, v in self.train_results.items()}
                     test_printdict = {self.optimizer_names[k]: v[-1] for k, v in self.test_results.items()}
                     print(self.optimizer_names)
+                    print(self.settings)
                     print ('Epoch [{}/{}], Step [{}/{}], Loss: '.format(epoch+1, self.num_epochs, i+1, total_step) + str(train_printdict) + ', Val: ' + str(test_printdict))
                            
         return self.train_results, self.test_results
@@ -115,18 +119,36 @@ if __name__ == '__main__':
     """
 
     # get command line args 
-    model_arg, dataset_arg = sys.argv[1:]
+    model_arg, dataset_arg, num_epochs, kin_version = sys.argv[1:]
+    kin_version = str(kin_version)
+    num_epochs = int(num_epochs)
+
+    if kin_version == 'vanilla':
+        import kinematics_vanilla as kinematics
+    elif kin_version == 'stable':
+        import kinematics_stable as kinematics
+    elif kin_version == 'vadj':
+        import kinematics_vadj as kinematics
+    elif kin_version == 'kin':
+        import kinematics as kinematics
+    elif kin_version == 'bkwd':
+        import kinematics_bkwd as kinematics
+    elif kin_version == 'dub':
+        import kinematics_dub as kinematics
+    else:
+        raise NotImplementedError
 
     settings_dict = {
         "batch_size": 128,
-        "num_epochs": 1,
+        "num_epochs": int(num_epochs),
         "shuffle_train": True,
         "flatten_dim": 3072,
         "num_classes": 10,
         "dataset": dataset_arg,
         "model": model_arg,
         "loss": 'CrossEntropyLoss',
-        "optimizers": ['Adam', 'KinFwd', 'LBFGS'] #, 'Adadelta', 'RMSprop'] 
+        "optimizers": ['Adam', 'Kinematics', 'ASGD'], #, 'Adadelta', 'RMSprop'] 
+        "kin_version": kin_version
 
     }
 
@@ -194,7 +216,7 @@ if __name__ == '__main__':
         optimizer_list.append(opt_attr(opt_model.parameters()))
 
     # init trainer 
-    xTrainer = XTrainer(model_list, criterion, optimizer_list, optimizer_names, train_loader, test_loader, flatten_dim = settings_dict['flatten_dim'], num_epochs = settings_dict['num_epochs'])
+    xTrainer = XTrainer(settings_dict, model_list, criterion, optimizer_list, optimizer_names, train_loader, test_loader, flatten_dim = settings_dict['flatten_dim'], num_epochs = settings_dict['num_epochs'])
 
     # get results 
     train_results, test_results = xTrainer.train()
@@ -205,6 +227,6 @@ if __name__ == '__main__':
     
     # pickle results 
     pickle_path = './xtrain_results/'
-    pickle_filename = pickle_path + '{}_{}_{}_{}_E{}_B{}.pickle'.format(settings_dict['dataset'], settings_dict['model'], settings_dict['loss'], opt_save_str, settings_dict['num_epochs'], settings_dict['batch_size'])
+    pickle_filename = pickle_path + kin_version + '_{}_{}_{}_{}_E{}_B{}.pickle'.format(settings_dict['dataset'], settings_dict['model'], settings_dict['loss'], opt_save_str, settings_dict['num_epochs'], settings_dict['batch_size'])
     with open(pickle_filename, 'wb') as handle:
         pickle.dump(results_to_save, handle, protocol = pickle.HIGHEST_PROTOCOL)

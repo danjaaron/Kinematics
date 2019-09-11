@@ -1,13 +1,21 @@
 import pickle 
 import matplotlib.pyplot as plt
 
-dataset = 'CIFAR10'
+fig_save_path = './kinvadj_figs/'
+pickle_load_path = './scp/xtrain/kinvadj/'
+filename_version = 'vadj_'
+
+dataset = 'CIFAR100'
 model = 'resnet18'
 batch_size = 'B128'
-opts = 'AmKd'
-epochs = 'E1'
+opts = 'AmKsAd'
+epochs = 'E5'
 save_fig = True
-filename = '{}_{}_CrossEntropyLoss_{}_E1_{}'.format(dataset, model, opts, batch_size)
+
+
+
+dataset = filename_version + dataset
+filename = '{}_{}_CrossEntropyLoss_{}_{}_{}'.format(dataset, model, opts, epochs, batch_size)
 def plot_training_results(a):
 	plt_legend = []
 	i = 0
@@ -23,7 +31,7 @@ def plot_training_results(a):
 	plt.xlabel('Iterations')
 	plt.ylabel('Loss')
 	if save_fig:
-		plt.savefig('xtrain_' + filename + '.png')
+		plt.savefig(fig_save_path + 'xtrain_' + filename + '.png')
 	plt.show()
 
 def plot_testing_results(a):
@@ -41,10 +49,10 @@ def plot_testing_results(a):
 	plt.xlabel('Iterations')
 	plt.ylabel('Test Acc %')
 	if save_fig:
-		plt.savefig('xtest_' + filename + '.png')
+		plt.savefig(fig_save_path + 'xtest_' + filename + '.png')
 	plt.show()
 
-with open('./scp/xtrain/' + filename + '.pickle', 'rb') as handle:
+with open(pickle_load_path + filename + '.pickle', 'rb') as handle:
     a = pickle.load(handle)
     plot_training_results(a)
     plot_testing_results(a)

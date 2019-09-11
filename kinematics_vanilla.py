@@ -24,7 +24,6 @@ class Kinematics(Optimizer):
         self.params = params
         self.model_save_name = './'+str(round(time.time()))
         self.past_g = []
-        self.v0 = 0. # scalar downward velocity
         
 
     def time_of_impact(self, uf_in):
@@ -33,14 +32,14 @@ class Kinematics(Optimizer):
         under gravitational acceleration. 
         """
         a = self.g
-        t = (float(uf_in) - self.v0)/float(a)
+        t = (float(uf_in))/float(a)
         return t
 
     def get_final_velocity(self, start_height):
         """
         Computes downward velocity at time of impact (loss = 0).
         """
-        uf = math.sqrt(self.v0**2 + 2.0*abs(self.g)*abs(start_height))
+        uf = math.sqrt(2.0*abs(self.g)*abs(start_height))
         return uf
         
     def step(self, closure, model):
@@ -51,8 +50,7 @@ class Kinematics(Optimizer):
             loss (req): PyTorch loss Tensor at each step 
         """
 
-        v0 = float(self.v0)
-
+        loss = closure() 
         # get norm of total old gradient 
         old_grad_tens = torch.Tensor().to('cuda')
         for group in self.param_groups:
@@ -62,7 +60,10 @@ class Kinematics(Optimizer):
                 else:
                     old_grad_tens = torch.cat((old_grad_tens, p.grad.view(-1).to('cuda')))
         old_grad_norm = torch.norm(old_grad_tens, p = 2)
-        
+        #old_grad_norm = np.linalg.norm([float(old_grad_tens.size()[0]), float(old_grad_tens.sum().item())])
+        #old_grad_norm = math.sqrt(math.pow(old_grad_tens.sum().item(), 2))
+        # old_grad_norm = old_grad_tens.sum().item()
+        # old_grad_norm = np.sqrt(float(sum(old_grad_tens.size())))
         # get time of impact 
         loss = closure()
         self.h = float(loss.item())
@@ -83,28 +84,14 @@ class Kinematics(Optimizer):
                 if p.grad is None:
                     continue
                 # store old grad 
-                old_grad = p.grad/old_grad_norm 
+                old_grad = (torch.norm(p.grad, p = 2)/torch.norm(old_grad_tens, p =2))*p.grad #/old_grad_norm
                 old_grad_dict[group_index][param_index] = old_grad
                 # update position 
-                p.data.add_(-t_impact, old_grad) 
+                p.data.add_(-t_impact*old_grad) 
+                #p.data = p.data + 1.0/old_grad
                 new_location[group_index][param_index] = p.data.clone().detach() # location after launch
                 param_index += 1
             group_index += 1
 
-         # new loss
-        loss = closure()
-        new_h = float(closure().item())
-        
-        '''
-        # adjust vf based on actual landing height
-        if new_h < old_h:
-            self.vf = v0 + self.g*t_impact
-            print("vf: {} -> {}".format(v0, vf))
-
-        # set next v0
-        self.v0 = self.vf
-
-        print("new v0 {}".format(self.v0))
-        '''
-        
+       
         return loss
