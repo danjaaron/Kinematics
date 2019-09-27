@@ -146,13 +146,7 @@ class Kinematics(Optimizer):
         #self.past_g.append(self.g)
         # self.g = np.mean(self.past_g)
         # print(self.g)
-
-        '''
-        new_g = 2.*(old_h + old_h - new_h)/(t_impact**2)
-        if self.g == 9.8:
-            self.g = new_g
-        else:
-            self.g = (0.5)*self.g + (0.5)*new_g
+        
         '''
         # self.g = (self.g + 2.*(old_h + old_h - new_h)/(t_impact**2))/2. #self.vf/t_impact
         

@@ -1,15 +1,15 @@
 import pickle 
 import matplotlib.pyplot as plt
 
-fig_save_path = './kindub_figs/'
-pickle_load_path = './scp/xtrain/kindub/'
+fig_save_path = './gtrain/'
+pickle_load_path = './gtrain/'
 filename_version = 'dub_'
 
-dataset = 'CIFAR100'
-model = 'resnet18'
-batch_size = 'B128'
-opts = 'AmKsAd'
-epochs = 'E10'
+dataset = 'MNIST'
+model = 'Linear'
+batch_size = 'B10000'
+opts = 'KbAm'
+epochs = 'E1'
 save_fig = True
 
 
@@ -54,6 +54,6 @@ def plot_testing_results(a):
 
 with open(pickle_load_path + filename + '.pickle', 'rb') as handle:
     a = pickle.load(handle)
-    plot_training_results(a)
-    plot_testing_results(a)
-
+    #plot_training_results(a)
+    #plot_testing_results(a)
+    print(a)
