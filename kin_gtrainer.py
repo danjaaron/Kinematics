@@ -243,6 +243,6 @@ if __name__ == '__main__':
     
     # pickle results 
     pickle_path = './gtrain/'
-    pickle_filename = pickle_path + '_{}_{}_{}_{}_E{}_B{}.pickle'.format(settings_dict['dataset'], settings_dict['model'], settings_dict['loss'], opt_save_str, settings_dict['num_epochs'], settings_dict['batch_size'])
+    pickle_filename = pickle_path + '{}_{}_{}_{}_E{}_B{}.pickle'.format(settings_dict['dataset'], settings_dict['model'], settings_dict['loss'], opt_save_str, settings_dict['num_epochs'], settings_dict['batch_size'])
     with open(pickle_filename, 'wb') as handle:
         pickle.dump(results_to_save, handle, protocol = pickle.HIGHEST_PROTOCOL)
