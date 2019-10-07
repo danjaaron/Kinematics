@@ -238,6 +238,7 @@ if __name__ == '__main__':
             print(hasattr(optObj, "past_g"))
             print(len(optObj.past_g))
             results_to_save[optname]['g'] = optObj.past_g
+            results_to_save[optname]['grad_norm'] = optObj.past_grad_norm
     
     print(results_to_save)
     
