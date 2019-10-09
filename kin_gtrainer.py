@@ -118,12 +118,13 @@ if __name__ == '__main__':
     """
 
     # get command line args 
-    model_arg, dataset_arg, num_epochs, kin_version = sys.argv[1:]
+    model_arg, dataset_arg, num_epochs, batch_size, kin_version = sys.argv[1:]
     kin_version = str(kin_version)
     num_epochs = int(num_epochs)
+    batch_size = int(batch_size)
 
     settings_dict = {
-        "batch_size": 5000, #128,
+        "batch_size": batch_size,
         "num_epochs": int(num_epochs),
         "shuffle_train": True,
         "flatten_dim": 3072,
