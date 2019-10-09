@@ -123,7 +123,7 @@ if __name__ == '__main__':
     num_epochs = int(num_epochs)
 
     settings_dict = {
-        "batch_size": 128,
+        "batch_size": 5000, #128,
         "num_epochs": int(num_epochs),
         "shuffle_train": True,
         "flatten_dim": 3072,

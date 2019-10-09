@@ -25,6 +25,7 @@ class KinBin(Optimizer):
         self.params = params
         self.model_save_name = './'+str(round(time.time()))
         self.past_g = []
+        self.past_grad_norm = []
         
     def time_of_impact(self, uf_in):
         """
@@ -66,6 +67,7 @@ class KinBin(Optimizer):
                 else:
                     old_grad_tens = torch.cat((old_grad_tens, p.grad.view(-1).to('cuda')))
         old_grad_norm = torch.norm(old_grad_tens, p = 2)
+        self.past_grad_norm.append(float(old_grad_norm))
         
         # get time of impact 
         loss = closure()
@@ -126,6 +128,7 @@ class KinDub(Optimizer):
         self.params = params
         self.model_save_name = './'+str(round(time.time()))
         self.past_g = []
+        self.past_grad_norm = []
         
     def time_of_impact(self, uf_in):
         """
@@ -167,6 +170,7 @@ class KinDub(Optimizer):
                 else:
                     old_grad_tens = torch.cat((old_grad_tens, p.grad.view(-1).to('cuda')))
         old_grad_norm = torch.norm(old_grad_tens, p = 2)
+        self.past_grad_norm.append(float(old_grad_norm))
         
         # get time of impact 
         loss = closure()
