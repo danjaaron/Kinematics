@@ -142,7 +142,8 @@ if __name__ == '__main__':
     version_dict = {
         'Kb': 'KinDub',
         'Am': 'Adam',
-        'Ad': 'ASGD'
+        'Ad': 'ASGD',
+        'Kg': 'KinProg'
     }
 
     # select kin algo

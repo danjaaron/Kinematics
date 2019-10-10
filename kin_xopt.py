@@ -210,3 +210,160 @@ class KinDub(Optimizer):
 
         return loss
 
+class KinProg(Optimizer):
+    """
+    Kin Progressive from Brijen analysis test.py
+    """
+
+    def __setstate__(self, state):
+        super(KinProg, self).__setstate__(state)
+
+    def __init__(self, params):
+        default_dict = {'g': 1e-10}
+        super(KinProg, self).__init__(params, defaults = default_dict)
+
+        # settings 
+        self.g = default_dict['g']
+        self.grad_dict = {} 
+        self.params = params
+        self.model_save_name = './'+str(round(time.time()))
+        self.past_g = []
+        self.past_grad_norm = []
+        self.progress = [0.]
+        self.scale_factor = 10.0
+        
+    def step(self, closure, model):
+        """
+        Performs a single optimization step.
+
+        Arguments:
+            loss (req): PyTorch loss Tensor at each step 
+        """
+
+        print(self.g)
+
+        
+        self.past_g.append(float(self.g))
+
+        # get norm of total old gradient 
+        old_grad_tens = torch.Tensor().to('cuda')
+        cloned_data = {}
+        group_index = 0
+        for group in self.param_groups:
+            param_index = 0
+            cloned_data[group_index] = {}
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                else:
+                    old_grad_tens = torch.cat((old_grad_tens, p.grad.view(-1).to('cuda')))
+                    # clone data for curr prog
+                    cloned_data[group_index][param_index] = p.data.clone().detach()
+                param_index += 1
+            group_index += 1
+        old_grad_norm = torch.norm(old_grad_tens, p = 2)
+        self.past_grad_norm.append(float(old_grad_norm))
+        
+
+        l0 = float(closure().item())
+        t_impact = np.sqrt(2.0 * float(l0)/self.g)
+
+        # update x
+        group_index = 0
+        for group in self.param_groups:
+            param_index = 0
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                v = -p.grad/old_grad_norm 
+                p.data = cloned_data[group_index][param_index] + t_impact*v
+                param_index += 1
+            group_index += 1
+
+        lf = float(closure().item())
+
+        prev_p = self.progress[-1] 
+        curr_p = float(l0 - lf)
+
+        while ((curr_p < 0.0)):
+            print("repeat")
+            self.g *= self.scale_factor
+            t_impact = np.sqrt(2.0 * float(l0)/self.g)
+            # update x
+            group_index = 0
+            for group in self.param_groups:
+                param_index = 0
+                for p in group['params']:
+                    if p.grad is None:
+                        continue
+                    v = -p.grad/old_grad_norm 
+                    p.data = cloned_data[group_index][param_index] + t_impact*v
+                    param_index += 1
+                group_index += 1
+            # get new progress
+            lf = float(closure().item())
+            curr_p = float(l0 - lf)
+
+        self.progress.append(curr_p)
+
+        if lf > l0 - lf/float(self.g):
+            print('g +')
+            self.g *= self.scale_factor
+
+        return lf
+'''
+def p_optimize(x0, f, df, df_normalized, T=iters, verbose = False):
+    # increase g if less progress is made than last step
+    g = 1e-10
+    scale_factor = 10.0
+    larr, ssarr, garr = [], [], []
+    progress = [0.]
+    for i in range(T):
+        
+        l0 = f(x0)
+        step_size = np.sqrt(2.0 * float(l0)/g)
+
+        
+        
+        larr.append(l0)
+        garr.append(g)
+        ssarr.append(step_size)
+
+        print(df_normalized(x0))
+        print(df(x0))
+
+        xf = x0 - step_size * df_normalized(x0)
+
+        lf = f(xf) 
+
+        prev_p = progress[i] 
+        curr_p = float(l0 - lf) # progress in this step
+
+        while ((curr_p < 0.0)): # and (g <= abs(lf/l0))): 
+            g *= scale_factor
+            step_size = np.sqrt(2.0 * float(l0)/g)
+            xf = x0 - step_size * df_normalized(x0)
+            lf = f(xf) 
+            curr_p = float(l0 - lf)
+            if verbose:
+                print("repeated ", lf, curr_p, prev_p, g)
+        curr_p = float(l0 - lf) # progress in this step
+        progress.append(curr_p)
+
+        # # increase g if last step made more progress
+        # if (prev_p < curr_p):
+        #   g *= 10.
+        # else:
+        #   g *= 0.1
+        
+        if lf >= l0 - lf/float(g):
+            if verbose:
+                print('g +')
+            g *= scale_factor
+
+        if verbose:
+            print(i, lf, x0, xf, curr_p, prev_p, g)
+        x0 = xf
+
+    return larr, garr
+'''
