@@ -74,6 +74,7 @@ class KinMnm(Kin):
     def __init__(self, params):
         super(KinMnm, self).__init__(params)
         self.v = {}
+        self.t = 0
         self.b1 = 0.9
         for (gidx, group) in enumerate(self.param_groups):
                 self.v[gidx] = dict()
@@ -84,8 +85,8 @@ class KinMnm(Kin):
 
 
     def update_params(self, step_size, grad_norm):
-
-        # update params
+        
+        self.t += 1
         for (gidx, group) in enumerate(self.param_groups):
             for (pidx, p) in enumerate(group['params']):
                 if p.grad is None:
@@ -225,14 +226,14 @@ class KinOptg(KinAdg):
                             dp = -step_size * p.grad / grad_norm
                             p.data.add_(dp)
                             _hf = closure().item()
-                            curr_dl = _hf - _h0=
+                            curr_dl = _hf - _h0
                             p.data.add_(-dp)
                             i += 1
                         # best g
                         best_g = g - gstep #/ gstep
                         glist.append((best_g, prev_dl))
                     # take all time best g 
-                    g = min(glist, key = lambda x: x[1])[0]=
+                    g = min(glist, key = lambda x: x[1])[0]
                     # take step
                     h0 = closure().item()
                     step_size = np.sqrt(2.0 * h0 / g)

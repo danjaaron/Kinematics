@@ -89,7 +89,10 @@ class XTrainer:
                     test_printdict = {self.optimizer_names[k]: v[-1] for k, v in self.test_results.items()}
                     print(self.optimizer_names)
                     print ('Epoch [{}/{}], Step [{}/{}], Loss: '.format(epoch+1, self.num_epochs, i+1, total_step) + str(train_printdict) + ', Val: ' + str(test_printdict))
-                           
+        
+        # record total step for epoch axis labeling
+        self.total_step = total_step     
+        
         return self.train_results, self.test_results
 
     def test(self):
@@ -168,11 +171,12 @@ if __name__ == '__main__':
     # prepare results for pickling 
     results_to_save = {opt_names[o]: {'train_results': train_results[o], 'test_results': test_results[o]} for o in range(len(model_list))}
     results_to_save['args'] = args
+    results_to_save['iters_per_epoch'] = xTrainer.total_step
     
     # pickle results 
     pickle_path = './results/'
     file_string = str(args.kin_versions)
-    pickle_filename = pickle_path + file_string + str(len([_ for _ in os.listdir(pickle_path) if file_string in _])) + '.pickle'
+    pickle_filename = pickle_path + file_string + str(len([_ for _ in os.listdir(pickle_path) if file_string == _.split('.')[0][:-1]])) + '.pickle'
     with open(pickle_filename, 'wb') as handle:
         pickle.dump(results_to_save, handle, protocol = pickle.HIGHEST_PROTOCOL)
 
