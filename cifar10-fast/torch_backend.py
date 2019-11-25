@@ -252,12 +252,11 @@ def LARS_update(state, w, dw, v, lr, weight_decay, momentum):
 
 # Kinematics
 def kin_update(state, w, dw, *args):
-    if state['h0'] and state['g']:
-        # print('kin update: h0 {}, g {}'.format(state['h0'], state['g']))
+    if 'h0' in state:
+        if not 'g' in state:
+            state['g'] = 1.0
         t = math.sqrt(2.0*state['h0']/state['g'])
         w.add_(-t, dw / state['grad_norm'])
-    else:
-        print('kin FAIL -- h0 or g is None')
     
 
 def zeros_like(weights):
@@ -285,6 +284,28 @@ def opt_step(batch, state, update, param_schedule, step_number, weights, opt_sta
 LARS = partial(optimiser, update=LARS_update, state_init=zeros_like)
 SGD = partial(optimiser, update=nesterov_update, state_init=zeros_like)
 KIN = partial(optimiser, update=kin_update, state_init=zeros_like)
+
+#####################
+## Kinematics
+#####################
+
+def get_initial_loss(batches, state):
+    # store initial loss in state 
+    if 'output' in state: 
+        state['h0'] = torch.mean(state['output']['loss']).item()
+        # print("got h0 {}".format(state['h0']))
+
+def get_final_loss(batches, state):
+    if 'output' in state: 
+        state['hf'] = torch.mean(state['output']['loss']).item()
+        # print("got hf {}".format(state['hf']))
+
+def update_g(batches, state):
+    if 'hf' in state and 'h0' in state:
+        if state['hf'] > state['h0']:
+            state['g'] *= 2.0
+            # print('new g ', state['g'])
+
   
 #####################
 ## training
@@ -295,39 +316,15 @@ def reduce(batches, state, steps):
     #state: is a dictionary
     #steps: are functions that take (batch, state)
     #and return a dictionary of updates to the state (or None)
-
-    state['g'] = 1.0
-    state['h0'] = None
-    state['hf'] = None
-    
     for batch in chain(batches, [None]): 
     #we send an extra batch=None at the end for steps that 
     #need to do some tidying-up (e.g. log_activations)
             
         for sidx, step in enumerate(steps):
-            if sidx > 2:
-                # optimization steps 
-                h0 = torch.mean(state['output']['loss']).item()
             updates = step(batch, state)
             if updates:
                 for k,v in updates.items():
-
-                    # pre-step
-                    h0 = None
-                    if k == 'output' and k in state:
-                        h0 = torch.mean(state['output']['loss']).item()
-                        state['h0'] = h0
-
                     state[k] = v   
-
-                    if k == 'output' and k in state and not h0 is None:
-                        # (!!!!) how to handle unequal h0, hf sizes?
-                        hf = torch.mean(state['output']['loss']).item()
-                        state['hf'] = hf
-                        # check g doubling 
-                        if hf > h0:
-                            state['g'] *= 2.0
-                            # print("new g {}: hf {} > h0 {}".format(state['g'], hf, h0))
 
     return state
   
@@ -400,7 +397,7 @@ def update_ema(momentum, update_freq=1):
             ema_v += (1-rho)*v
     return step
 
-default_train_steps = (forward(training_mode=True), log_activations(('loss', 'acc')), backward(), opt_steps)
+default_train_steps = (forward(training_mode=True), log_activations(('loss', 'acc')), backward(), get_initial_loss, opt_steps, get_final_loss, update_g)
 default_valid_steps = (forward(training_mode=False), log_activations(('loss', 'acc')))
 
 
