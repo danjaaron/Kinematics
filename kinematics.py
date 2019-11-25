@@ -12,6 +12,8 @@ class Kin(Optimizer):
 
     def __init__(self, params):
         self.g = 1.0
+        self.last_grad_norm = None 
+        self.last_loss = None 
         default_dict = {'g': float(self.g)}
         # print(super(self.__class__)
         super(Kin, self).__init__(params, defaults = default_dict)
@@ -57,13 +59,105 @@ class Kin(Optimizer):
 
         grad_norm = self.get_grad_norm()
         step_size = self.get_step_size(h0)
+        self.grad_norm = grad_norm
+        self.loss = h0 
         self.update_params(step_size, grad_norm)
 
         hf = closure().item()
 
         self.update_g(h0, hf)
 
+        self.last_grad_norm = grad_norm
+        self.last_loss = h0 
+
         return h0
+
+class KinOsc(Kin):
+
+    alias = 'O'
+
+    # if oscillating, will be closer to earlier positions than later ones
+
+    def __init__(self, params):
+        super(KinOsc, self).__init__(params)
+        # track last 3 positions 
+        self.last_p = list()
+        self.oscillating = False
+
+    def get_grad_norm(self):
+        """ Get norm of gradient
+        """
+        flat_grad = torch.Tensor().to('cuda')
+        flat_params = torch.Tensor().to('cuda') # for distances
+        for group in self.param_groups:
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                else:
+                    flat_grad = torch.cat((flat_grad, p.grad.view(-1).to('cuda')))
+                    flat_params = torch.cat((flat_params, p.data.view(-1).to('cuda')))
+        grad_norm = torch.norm(flat_grad, p = 2)
+        # check distance between last 3 
+        if len(self.last_p) == 2:
+            # get current param distance from past params
+            distances = [torch.dist(flat_params, _).item() for _ in self.last_p]
+            # check if reverse monotonic distances
+            self.oscillating = not all(distances[i] >= distances[i+1] for i in range(len(distances) - 1))
+            print('OSC: ', self.oscillating)
+            # track latest params
+            self.last_p = np.roll(self.last_p, -1)
+            self.last_p[-1] = flat_params
+        else:
+            self.last_p.append(flat_params)
+        return grad_norm
+
+    def get_step_size(self, loss):
+        ss = np.sqrt(2.0*loss/self.g)
+        if self.oscillating:
+            correct_ss = ss / 2.0
+            self.g = 2.0 * loss / (correct_ss ** 2)
+            ss = correct_ss
+            assert(correct_ss == np.sqrt(2.0 * loss / self.g))
+        return ss
+
+
+
+
+class KinE(Kin):
+
+    alias = 'E'
+
+    def update_params(self, step_size, grad_norm):
+        for group in self.param_groups:
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                p.data.add_(-step_size, p.grad / grad_norm)
+
+    def update_g(self, h0, hf):
+        if self.last_grad_norm is None:
+            print("last grad is none")
+            # if hf > h0:
+                # self.g *= 2.0   
+        else: 
+            print("last grad NOT none")
+            # conserve energy s
+            new_g = (self.g * self.last_loss + 0.5 * (self.last_grad_norm ** 2 - self.grad_norm ** 2)) / h0
+            new_g = new_g.item()
+            print("new ", new_g)
+            if new_g > 0:
+                self.g = new_g
+            elif hf > h0:
+                self.g *= 2.0
+            '''
+            if new_g.item() > 0:
+                print("new ", new_g)
+                self.g = abs(new_g.item())
+            elif hf > h0:
+                self.g *= 2.
+            '''
+
+
 
 
 
@@ -191,7 +285,7 @@ class KinAdgP(KinAdg):
                     self.g_dict[gidx][pidx] += p_norm ** 2
 
 
-
+'''
 class KinOptg(KinAdg):
 
     alias = 'O'
@@ -243,4 +337,4 @@ class KinOptg(KinAdg):
                     dl = hf - h0
                     # save g 
                     self.g_dict[gidx][pidx] = g
-                       
+'''
