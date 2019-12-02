@@ -39,12 +39,12 @@ class XTrainer:
             self.train_results[opt_ind] = []
             self.test_results[opt_ind] = []
     
-    def train(self):
+    def train(self, print_every):
         """ Trains and tests model according to epochs, storing test loss and training accuracy at each step
         """
         # set printing settings
         total_step = len(self.train_loader)
-        self.print_every = 10 #int(round(total_step / 10.))
+        self.print_every = print_every #int(round(total_step / 10.))
         # train
         for epoch in range(self.num_epochs):
             for i, (data, target) in enumerate(self.train_loader): 
@@ -126,6 +126,7 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--model', default = 'Linear')
     parser.add_argument('-e', '--num_epochs', type = int, default = 1)
     parser.add_argument('-b', '--batch_size', type = int, default = 128)
+    parser.add_argument('-p', '--print_every', type = int, default = 1)
     args = parser.parse_args()
 
     # init loss criterion
@@ -166,7 +167,7 @@ if __name__ == '__main__':
     xTrainer = XTrainer(criterion, model_list, opt_list, opt_names, train_loader, test_loader, num_epochs = args.num_epochs, flatten_dim = flatten_dim)
 
     # get results 
-    train_results, test_results = xTrainer.train()
+    train_results, test_results = xTrainer.train(args.print_every)
 
     # prepare results for pickling 
     results_to_save = {opt_names[o]: {'train_results': train_results[o], 'test_results': test_results[o]} for o in range(len(model_list))}

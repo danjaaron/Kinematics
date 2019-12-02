@@ -1,16 +1,21 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import os, pickle
+import os, pickle, math
 # f = lambda x: float(x**2 + 10)
 # df = lambda x: float(2*x)
 # df_normalized = lambda x: float(np.sign(x))
 # x = 100
+
+# condition # of A: lambda_max / lambda_min, increase 
 
 x = np.array([10, 1, 2])
 A = np.array([[1, 0, 0], [0, 20, 0], [0, 0, .01]])
 f = lambda x: x.T.dot(A).dot(x) + 100
 df = lambda x: 2 * A.dot(x)
 df_normalized = lambda x: df(x) / np.linalg.norm(df(x))
+df_vnorm = lambda x, v: df(x) / np.linalg.norm(np.append(df(x), np.array(v)))
+
+
 
 iters = 100
 
@@ -24,10 +29,53 @@ def normjoint(datalist):
 	newdatalist = [k/jointmax for k in datalist]
 	return newdatalist
 
+def kinvel(x, f, df, df_normalized, T=iters, thresh=1e-3, verbose = False):
+	g = 10.
+	v0 = 0.
+
+	def get_vf(v0, a, dx):
+		return math.sqrt(v0**2 + 2*a*dx)
+
+	larr, ssarr, garr = [], [], []
+	for i in range(T):
+		print('v0: ', v0)
+		garr.append(g)
+		h0 = f(x)
+		larr.append(h0)
+		# get step size 
+		vf = get_vf(v0, g, h0)
+		# t = h0 / vf 
+		t = 2.0*h0 / (v0 + vf)
+		step_size = -t * df_normalized(x)
+		ssarr.append(step_size)
+		# step
+		x = x + step_size  #* (np.linalg.norm(df(x))) / (np.linalg.norm(np.append(df(x), vf)))
+		# adjust v
+		hf = f(x)
+		v0 = vf 
+
+		if h0 > hf:
+			v0 = get_vf(v0, g, abs(h0 - hf))
+		else:
+			# g += (hf / vf)**2 
+			g += abs(hf) / (t**2)
+			v0 = 0.
+			# undo step 
+			x = x - step_size
+
+
+
+		if verbose:
+			print(i, x, f(x), step_size, g)
+
+	return larr, garr
+
+
+
 def optimize(x, f, df, df_normalized, T=iters, thresh=1e-3, verbose = False): #1e-3, verbose = False):
 	g = 10.0
-	larr, ssarr, garr = [], [], []
 	dx = - np.sqrt(2.0 * float(f(x))/g) * df_normalized(x)
+	larr, ssarr, garr = [], [], []
 	for i in range(T):
 		f_orig = f(x)
 		step_size = np.sqrt(2.0 * float(f(x))/g)
@@ -217,8 +265,6 @@ def sgd(x, f, df, df_normalized, T=iters, step_size=1e-3, verbose = False):
 			print(i, x)
 	return larr
 
-normalize_bool = False
-plot_g = False
 
 # p_optimize(x, f, df, df_normalized, verbose = True)
 
@@ -239,9 +285,21 @@ def plot_optimizers(opt_list, colors, legend_list):
 	plt.title("Optimizer Loss vs Iters")
 	plt.show()
 
-opts = [optimize, mnm_optimize]
-colors = ['black', 'green', 'red']
-lgnd = ['threshold', 'momentum']
+
+normalize_bool = False
+plot_g = False
+
+only_vel = True
+
+if only_vel:
+	opts = [kinvel] # [optimize, mnm_optimize, kinvel]
+	colors = ['red'] # ['black', 'green', 'red']
+	lgnd = ['vel'] # ['threshold', 'momentum', 'vel']
+else:
+	opts = [optimize, mnm_optimize, kinvel]
+	colors = ['black', 'green', 'red']
+	lgnd = ['threshold', 'momentum', 'vel']
+
 plot_optimizers(opts, colors, lgnd)
 
 '''

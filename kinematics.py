@@ -86,30 +86,47 @@ class KinVel(Optimizer):
         """ Get norm of gradient with velocity included
         """
         generator = [k.grad.view(-1).to('cuda') for p in ( g['params'] for g in self.param_groups ) for k in p if k.grad is not None]
-        generator.append(torch.Tensor([self.v0]).to('cuda'))
+        # OLD: generator.append(torch.Tensor([self.v0]).to('cuda'))
+        # above is not in test, but should be technically correct
         grad_norm = torch.norm(torch.cat(generator), p = 2).item()
         return grad_norm
 
-
-    def get_vf(self, loss):
-        # get velocity 
-        vf = math.sqrt(self.v0**2 + 2.*self.g*loss) 
-        return vf
-
-    def update_params(self, vf, grad_norm):
+    def update_params(self, vf, grad_norm, undo = False):
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is None:
                     continue
-                t = self.loss / vf 
-                # p_norm = torch.norm(p.grad, p=2).item()
-                p.data.add_(-t, p.grad / grad_norm)
+                # OLD:
+                # t = self.loss / vf 
+                if undo:
+                    self.t *= -1.0
+                p.data.add_(-self.t, p.grad / grad_norm)
+
+    def get_vf(self, v0, a, dx):
+        return math.sqrt(v0**2 + 2.0*a*dx)
 
     def update_g(self, h0, hf):
+        if h0 > hf:
+            self.vf = self.get_vf(self.v0, self.g, abs(h0 - hf))
+        else:
+            # OLD: self.g += (hf / vf)**2 
+            self.g += (hf / (self.t**2))
+            self.update_params(self.vf, self.grad_norm, undo = True)
+            self.vf = 0.
+
+        '''
         # update v 
-        self.vf = np.sqrt(self.v0**2 + 2.0*self.g*(h0 - hf))
+        # self.vf = np.sqrt(self.v0**2 + 2.0*self.g*(h0 - hf))
         if hf > h0:
-            self.g *= 2.0 #+= ((hf - h0) / ((h0 / self.vf) ** 2))
+            # self.g *= 2.0 #+= ((hf - h0) / ((h0 / self.vf) ** 2))
+            self.g += (hf / self.vf) ** 2
+            self.update_params(self.vf, self.grad_norm, True)
+            self.vf = 0.
+        else:
+            # self.g = ((h0 - hf) / self.vf) ** 2
+            t = h0 / self.vf
+            self.vf = (h0 - hf) / t
+        '''
 
     def step(self, closure, model):
         """ Update parameters 
@@ -119,8 +136,12 @@ class KinVel(Optimizer):
 
         h0 = closure().item()
         self.loss = h0 
-        vf = self.get_vf(h0)
+        vf = self.get_vf(self.v0, self.g, h0)
         self.vf = vf
+
+        # OLD: self.t = h0 / vf 
+        self.t = 2.0*h0 / (self.v0 + self.vf)
+
 
 
         grad_norm = self.get_grad_norm()
