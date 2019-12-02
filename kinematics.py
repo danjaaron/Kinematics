@@ -24,14 +24,8 @@ class Kin(Optimizer):
     def get_grad_norm(self):
         """ Get norm of gradient
         """
-        flat_grad = torch.Tensor().to('cuda')
-        for group in self.param_groups:
-            for p in group['params']:
-                if p.grad is None:
-                    continue
-                else:
-                    flat_grad = torch.cat((flat_grad, p.grad.view(-1).to('cuda')))
-        grad_norm = torch.norm(flat_grad, p = 2)
+        generator = [k.grad.view(-1).to('cuda') for p in ( g['params'] for g in self.param_groups ) for k in p if k.grad is not None]
+        grad_norm = torch.norm(torch.cat(generator), p = 2).item()
         return grad_norm
 
 
@@ -47,7 +41,7 @@ class Kin(Optimizer):
 
     def update_g(self, h0, hf):
         if hf > h0:
-            self.g *= 2.0           
+            self.g *= 2.0 
 
     def step(self, closure, model):
         """ Update parameters 
@@ -72,6 +66,76 @@ class Kin(Optimizer):
 
         return h0
 
+class KinVel(Optimizer):
+
+    alias = 'V'
+
+    def __init__(self, params):
+        self.g = 1.0
+        self.v0 = 0.
+        self.last_grad_norm = None 
+        self.last_loss = None 
+        default_dict = {'g': float(self.g)}
+        # print(super(self.__class__)
+        super(KinVel, self).__init__(params, defaults = default_dict)
+
+    def __setstate__(self, state):
+        super(KinVel, self).__setstate__(state)
+
+    def get_grad_norm(self):
+        """ Get norm of gradient with velocity included
+        """
+        generator = [k.grad.view(-1).to('cuda') for p in ( g['params'] for g in self.param_groups ) for k in p if k.grad is not None]
+        generator.append(torch.Tensor([self.v0]).to('cuda'))
+        grad_norm = torch.norm(torch.cat(generator), p = 2).item()
+        return grad_norm
+
+
+    def get_vf(self, loss):
+        # get velocity 
+        vf = math.sqrt(self.v0**2 + 2.*self.g*loss) 
+        return vf
+
+    def update_params(self, vf, grad_norm):
+        for group in self.param_groups:
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                t = self.loss / vf 
+                # p_norm = torch.norm(p.grad, p=2).item()
+                p.data.add_(-t, p.grad / grad_norm)
+
+    def update_g(self, h0, hf):
+        # update v 
+        self.vf = np.sqrt(self.v0**2 + 2.0*self.g*(h0 - hf))
+        if hf > h0:
+            self.g *= 2.0 #+= ((hf - h0) / ((h0 / self.vf) ** 2))
+
+    def step(self, closure, model):
+        """ Update parameters 
+        """ 
+
+        self.closure = closure
+
+        h0 = closure().item()
+        self.loss = h0 
+        vf = self.get_vf(h0)
+        self.vf = vf
+
+
+        grad_norm = self.get_grad_norm()
+        self.grad_norm = grad_norm
+
+        self.update_params(vf, grad_norm)
+
+        hf = closure().item()
+
+        self.update_g(h0, hf)
+
+        self.v0 = self.vf
+
+        return h0
+
 class KinOsc(Kin):
 
     alias = 'O'
@@ -80,9 +144,10 @@ class KinOsc(Kin):
 
     def __init__(self, params):
         super(KinOsc, self).__init__(params)
-        # track last 3 positions 
+        # track last track_p params
         self.last_p = list()
         self.oscillating = False
+        self.track_p = 5
 
     def get_grad_norm(self):
         """ Get norm of gradient
@@ -98,15 +163,21 @@ class KinOsc(Kin):
                     flat_params = torch.cat((flat_params, p.data.view(-1).to('cuda')))
         grad_norm = torch.norm(flat_grad, p = 2)
         # check distance between last 3 
-        if len(self.last_p) == 2:
+        self.oscillating = False
+        if 2 < len(self.last_p) <= self.track_p:
             # get current param distance from past params
             distances = [torch.dist(flat_params, _).item() for _ in self.last_p]
             # check if reverse monotonic distances
             self.oscillating = not all(distances[i] >= distances[i+1] for i in range(len(distances) - 1))
-            print('OSC: ', self.oscillating)
-            # track latest params
-            self.last_p = np.roll(self.last_p, -1)
-            self.last_p[-1] = flat_params
+            print("OSC: ", self.oscillating)
+            print("dist: ", distances)
+            if self.oscillating:
+                # empty buffer if oscillating 
+                self.last_p = list()
+            elif len(self.last_p) == self.track_p:
+                # roll tracking buffer
+                self.last_p = np.roll(self.last_p, -1)
+                self.last_p[-1] = flat_params
         else:
             self.last_p.append(flat_params)
         return grad_norm
@@ -117,7 +188,6 @@ class KinOsc(Kin):
             correct_ss = ss / 2.0
             self.g = 2.0 * loss / (correct_ss ** 2)
             ss = correct_ss
-            assert(correct_ss == np.sqrt(2.0 * loss / self.g))
         return ss
 
 

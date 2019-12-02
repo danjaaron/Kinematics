@@ -44,7 +44,7 @@ class XTrainer:
         """
         # set printing settings
         total_step = len(self.train_loader)
-        self.print_every = 1 #int(round(total_step / 10.))
+        self.print_every = 10 #int(round(total_step / 10.))
         # train
         for epoch in range(self.num_epochs):
             for i, (data, target) in enumerate(self.train_loader): 
