@@ -13,6 +13,10 @@ import sys, os
 import kinematics
 import copy
 from copy import deepcopy
+import pycuda.driver as cuda
+cuda.init()
+
+
 
 class XTrainer:
     """ Cross-trains EVERY optimization algorithm on the specific model type
@@ -151,7 +155,7 @@ if __name__ == '__main__':
     num_classes = len(train_dataset.classes)
 
     # create models
-    model_init = lambda x: x()
+    model_init = lambda x: x().cuda()
     flatten_dim = None
     if args.model == 'Linear':
         in_features = reduce(operator.mul, train_dataset.data.shape[1:])

@@ -15,6 +15,10 @@ df = lambda x: 2 * A.dot(x)
 df_normalized = lambda x: df(x) / np.linalg.norm(df(x))
 df_vnorm = lambda x, v: df(x) / np.linalg.norm(np.append(df(x), np.array(v)))
 
+# condition number for fig titling 
+lambda_max = A[1][1]
+lambda_min = A[2][2]
+cond_num = float(lambda_max) / float(lambda_min)
 
 
 iters = 100
@@ -53,7 +57,6 @@ def kinvel(x, f, df, df_normalized, T=iters, thresh=1e-3, verbose = False):
 		# adjust v
 		hf = f(x)
 		v0 = vf 
-
 		if h0 > hf:
 			v0 = get_vf(v0, g, abs(h0 - hf))
 		else:
@@ -62,8 +65,6 @@ def kinvel(x, f, df, df_normalized, T=iters, thresh=1e-3, verbose = False):
 			v0 = 0.
 			# undo step 
 			x = x - step_size
-
-
 
 		if verbose:
 			print(i, x, f(x), step_size, g)
@@ -282,14 +283,11 @@ def plot_optimizers(opt_list, colors, legend_list):
 		print("graph {}: max g is {}".format(li, max(g[li])))
 	# print(g[1][0])
 	plt.legend(legend_list)
-	plt.title("Optimizer Loss vs Iters")
+	plt.title("Optimizer Loss vs Iters at Cond Num {}".format(cond_num))
 	plt.show()
 
 
-normalize_bool = False
-plot_g = False
-
-only_vel = True
+only_vel = False
 
 if only_vel:
 	opts = [kinvel] # [optimize, mnm_optimize, kinvel]
