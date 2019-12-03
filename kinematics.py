@@ -99,7 +99,7 @@ class KinVel(Optimizer):
                 if p.grad is None:
                     continue
                 grad_sum += (p.grad ** 2).sum()
-        grad_sum += self.v0 ** 2
+        # grad_sum += self.v0 ** 2
         self.grad_norm = math.sqrt(grad_sum)
         return self.grad_norm
 
