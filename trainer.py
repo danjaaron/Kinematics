@@ -13,8 +13,6 @@ import sys, os
 import kinematics
 import copy
 from copy import deepcopy
-import pycuda.driver as cuda
-cuda.init()
 
 
 
