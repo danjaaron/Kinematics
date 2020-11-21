@@ -1,0 +1,12 @@
+*.csv
+./results/*.csv
+*.pickle
+./results/*.pickle
+./datasets/*
+*.tar.gz
+./datasets/*.tar.gz
+./venv/
+./venv/*
+./datasets/*
+./data/*
+*.zip
