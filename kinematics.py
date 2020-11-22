@@ -4,6 +4,69 @@ import numpy as np
 import torch
 from torch.optim import Optimizer
 
+class Kin(Optimizer):
+    alias = 'K'
+
+    def __init__(self, params):
+        self.g = 1.0
+        self.last_grad_norm = None
+        self.last_loss = None
+        default_dict = {'g': float(self.g)}
+        # print(super(self.__class__)
+        super(Kin, self).__init__(params, defaults=default_dict)
+        self.prev_pdata = dict()
+
+    def __setstate__(self, state):
+        super(Kin, self).__setstate__(state)
+
+    def get_grad_norm(self):
+        """ Get norm of gradient
+        """
+        generator = [k.grad.view(-1).cuda() for p in (g['params'] for g in self.param_groups) for k in p if
+                     k.grad is not None]
+        grad_norm = torch.norm(torch.cat(generator), p=2).item()
+        return grad_norm
+
+    def get_step_size(self, loss):
+        return np.sqrt(2.0 * loss / self.g)
+
+    def update_params(self, step_size, grad_norm):
+        for group in self.param_groups:
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                self.prev_pdata[p] = (p.data, p.grad, grad_norm, step_size)
+                p.data.add_(-step_size, p.grad / grad_norm)
+
+    def update_g(self, h0, hf):
+        if hf > h0:
+            self.g *= 2.0
+
+    def step(self, closure):
+        """ Update parameters
+        """
+
+        self.closure = closure
+
+        h0 = closure().item()
+        self.h0 = h0
+
+        grad_norm = self.get_grad_norm()
+        step_size = self.get_step_size(h0)
+        self.grad_norm = grad_norm
+        self.loss = h0
+        self.update_params(step_size, grad_norm)
+
+        hf = closure().item()
+        self.hf = hf
+
+        self.update_g(h0, hf)
+
+        self.last_grad_norm = grad_norm
+        self.last_loss = h0
+
+        return h0
+
 class Bouncy(Optimizer):
     alias = 'B'
 
@@ -139,7 +202,6 @@ class Bouncy(Optimizer):
         '''
         # print(self.h, landscape_height, self.h_vel)
 
-
 class Time(Optimizer):
     alias = 'T'
 
@@ -210,76 +272,7 @@ class Time(Optimizer):
         #    self.update_g()
         return self.closure().item()
 
-
-
-
-
-class Kin(Optimizer):
-    alias = 'K'
-
-    def __init__(self, params):
-        self.g = 1.0
-        self.last_grad_norm = None
-        self.last_loss = None
-        default_dict = {'g': float(self.g)}
-        # print(super(self.__class__)
-        super(Kin, self).__init__(params, defaults=default_dict)
-        self.prev_pdata = dict()
-
-    def __setstate__(self, state):
-        super(Kin, self).__setstate__(state)
-
-    def get_grad_norm(self):
-        """ Get norm of gradient
-        """
-        generator = [k.grad.view(-1).cuda() for p in (g['params'] for g in self.param_groups) for k in p if
-                     k.grad is not None]
-        grad_norm = torch.norm(torch.cat(generator), p=2).item()
-        return grad_norm
-
-    def get_step_size(self, loss):
-        return np.sqrt(2.0 * loss / self.g)
-
-    def update_params(self, step_size, grad_norm):
-        for group in self.param_groups:
-            for p in group['params']:
-                if p.grad is None:
-                    continue
-                self.prev_pdata[p] = (p.data, p.grad, grad_norm, step_size)
-                p.data.add_(-step_size, p.grad / grad_norm)
-
-    def update_g(self, h0, hf):
-        if hf > h0:
-            self.g *= 2.0
-
-    def step(self, closure):
-        """ Update parameters 
-        """
-
-        self.closure = closure
-
-        h0 = closure().item()
-        self.h0 = h0
-
-        grad_norm = self.get_grad_norm()
-        step_size = self.get_step_size(h0)
-        self.grad_norm = grad_norm
-        self.loss = h0
-        self.update_params(step_size, grad_norm)
-
-        hf = closure().item()
-        self.hf = hf
-
-        self.update_g(h0, hf)
-
-        self.last_grad_norm = grad_norm
-        self.last_loss = h0
-
-        return h0
-
-
 """
-
 class Relaunch(Kin):
     
     alias='R'
@@ -312,7 +305,6 @@ class Relaunch(Kin):
                 p.data.add_(self.prev_pdata[p][0], self.prev_pdata[p][1]) #, self.prev_pdata[p][1] / self.prev_pdata[p][2])
         print('undid step')
 """
-
 
 class KinConvert(Kin):
     ''' Energy conversion implementation
@@ -350,7 +342,6 @@ class KinConvert(Kin):
         self.energy()
 
         # convert energy to potential
-
 
 class KinVel(Optimizer):
     alias = 'V'
@@ -479,7 +470,6 @@ class KinVel(Optimizer):
 
         return h0
 
-
 class KinOsc(Kin):
     alias = 'O'
 
@@ -533,7 +523,6 @@ class KinOsc(Kin):
             ss = correct_ss
         return ss
 
-
 class KinE(Kin):
     alias = 'E'
 
@@ -566,7 +555,6 @@ class KinE(Kin):
             elif hf > h0:
                 self.g *= 2.
             '''
-
 
 class KinMnm(Kin):
     alias = 'M'
@@ -616,7 +604,6 @@ class KinMnm(Kin):
         if False:
             self.g *= 2.0
 
-
 class KinAdg(Kin):
     """ Kinematics with adaptive (per-group) g value
     ... double g for each group if loss goes up after group is updated
@@ -662,7 +649,6 @@ class KinAdg(Kin):
 
         return h0
 
-
 class KinAdgP(KinAdg):
     alias = 'P'
 
@@ -681,8 +667,6 @@ class KinAdgP(KinAdg):
                 if hf > h0:
                     self.g_dict[gidx][pidx] += p_norm ** 2
 
-
-'''
 class KinOptg(KinAdg):
 
     alias = 'O'
@@ -734,4 +718,3 @@ class KinOptg(KinAdg):
                     dl = hf - h0
                     # save g 
                     self.g_dict[gidx][pidx] = g
-'''

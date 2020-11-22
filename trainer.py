@@ -9,22 +9,20 @@ TODO progress bar
 import pandas as pd
 
 import argparse
-import copy
-import operator
 import os
 import sys
-from copy import deepcopy
-from functools import reduce
-from functools import partial
+from datetime import datetime
 
 import inspect
 import pickle
-import time
 import torch
 import torchvision
 from torchvision import transforms
 import torchnlp
 from torchnlp import datasets
+import functools
+from functools import reduce
+import operator
 
 import kinematics
 
@@ -32,9 +30,10 @@ import kinematics
 class XTrainer:
     """ Cross-trains EVERY optimization algorithm on the specific model type
     """
-    def __init__(self, loss_criterion, model_list, optimizer_list, train_loader, test_loader, args,
+    def __init__(self, loss_criterion, model_list, optimizer_list, train_loader, test_loader, args, output_filename,
                  num_epochs=1, flatten_dim=None):
 
+        self.output_filename = output_filename
         self.epoch, self.iter = 0, 0
         self.total_step = 0
         self.batch = 0
@@ -68,14 +67,10 @@ class XTrainer:
         for opt_ind in range(len(optimizer_list)):
             for log_dict in self.log_dicts:
                 log_dict[opt_ind] = []
-
-        # create a dataframe to store checkpoint results
-        # self.column_names = ['batch', 'epoch', 'optimizer', 'loss', 'accuracy', 'gravity', 'opt_ind']
-        # self.results_df = pd.DataFrame(columns=self.column_names)
         self.results_df = pd.DataFrame()
 
     def train(self):
-        """ Trains and tests model according to epochs, storing test loss and training accuracy at each step
+        """ Trains and tests model according to epochs, storing train loss and test loss at each step
             .... checkpoints on every print
         """
 
@@ -150,8 +145,8 @@ class XTrainer:
                 'batch': self.batch,
                 'epoch': self.epoch,
                 'optimizer': self.optimizer_name,
-                'loss': float(self.loss.item()),
-                'accuracy': float(self.test()),
+                'train_loss': float(self.loss.item()),
+                'test_loss': float(self.test()),
                 'gravity':  g
             }, ignore_index=True)
 
@@ -161,20 +156,20 @@ class XTrainer:
         if _export:
             print('exporting')
             # save results
-            self.results_df.to_csv(self.args.output_file)
+            self.results_df.to_csv(self.output_filename)
             # save optimizer configuration
-            config_file = self.args.output_file.name[:-4] + '.pickle'
+            config_file = self.output_filename[:-4] + '.pickle'
             pickle.dump(self.optimizer_list, open(config_file, 'wb+'))
             # confirm
             print('. exported to ' + config_file[:-7])
 
 
     def test(self):
-        """ Returns test accuracy as a percentage over test loader
+        """ Returns average test loss
         """
+
         with torch.no_grad():
-            correct = 0
-            total = 0
+            loss_list = []
             for data, labels in self.test_loader:
                 # move all to device
                 data = data.to(self.device)
@@ -183,13 +178,25 @@ class XTrainer:
                 labels = labels.to(self.device)
                 # get predictions
                 outputs = self.model(data)
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                # score predictions
-                correct += (predicted == labels).sum().item()
-            # compute test accuracy percentage
-            test_accuracy = 100. * correct / total
-            return test_accuracy
+                loss_list.append(self.loss_criterion(outputs, labels).item())
+            # compute avg test loss
+            test_loss = sum(loss_list)/len(loss_list)
+            return test_loss
+
+
+def setup_results():
+    """ setup a directory for the results """
+    # get results number
+    num_results = len([k for k in os.listdir('./results/') if 'results' in k])
+    new_results_dir = './results/results{}/'.format(num_results)
+    os.mkdir(new_results_dir)
+    args_path = new_results_dir+'config.txt'
+    with open(args_path, 'w+') as f:
+        f.write(str(datetime.now())+"\n")
+        for sys_arg in sys.argv:
+            f.write("... {}\n".format(sys_arg))
+    print("... dumped args to {}".format(args_path))
+    return new_results_dir
 
 
 if __name__ == '__main__':
@@ -205,9 +212,15 @@ if __name__ == '__main__':
     parser.add_argument('-x', '--comparison_list', nargs='*') # torch optimizers to compare to
     # logging options
     parser.add_argument('-v', '--verbosity', choices=['opt', 'batch', 'epoch'], default='epoch')
-    parser.add_argument('--output_file', nargs='?', type=argparse.FileType('w'), default='./results/test.csv')
+    # parser.add_argument('--output_file', nargs='?', type=argparse.FileType('w'), default='./results/test.csv')
+    # loss criterion
+    parser.add_argument('-l', '--loss_criterion', choices=['CrossEntropyLoss', 'NLLLoss'], default='CrossEntropyLoss')
 
     args = parser.parse_args()
+    print(args)
+
+    results_dir = setup_results()
+    # args['output_file'] = results_dir+'results.csv'
 
     # extract optimizers to compare against
     xopt_names = args.comparison_list
@@ -216,7 +229,9 @@ if __name__ == '__main__':
     xopts.append(kinematics.Kin)
 
     # setup
-    criterion = getattr(torch.nn, 'CrossEntropyLoss')()
+    # criterion = getattr(torch.nn, 'CrossEntropyLoss')()
+    criterion = getattr(torch.nn, args.loss_criterion)()
+
     model_class = [getattr(module, args.model) for module in [torch.nn, torchvision.models] if hasattr(module, args.model)][0]
     dataset = None
     _src = None
@@ -266,6 +281,7 @@ if __name__ == '__main__':
         opt_list.append(optimizer)
 
     # train
+    output_filename = results_dir+'results.csv'
     xTrainer = XTrainer(criterion, model_list, opt_list, train_loader, test_loader, args,
-                        num_epochs=args.num_epochs, flatten_dim=flatten_dim)
+                        num_epochs=args.num_epochs, flatten_dim=flatten_dim, output_filename=output_filename)
     xTrainer.train()
