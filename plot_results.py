@@ -6,12 +6,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import sys
 
-# filename = './results/cifar100_resnet18_epoch200.csv'
-# filename = './results/cifar10_resnet18.csv'
 RESULTS_PATH = './results/'
-file_list = os.listdir(RESULTS_PATH)
+
 if len(sys.argv) > 1:
-    file_list = [a_ for a_ in sys.argv[1:]]
+    print(sys.argv)
+    RESULTS_PATH = sys.argv[-1]
+
+file_list = os.listdir(sys.argv[-1])
 
 for filename in file_list:
     if not '.csv' in filename:
@@ -25,10 +26,13 @@ for filename in file_list:
         # load results
         print("loading {}".format(filename))
         results_df = pd.read_csv(filename)
+        print(results_df.columns)
 
         # get data by optimizer
         df_list = []
-        columns_to_convert = ['loss', 'accuracy', 'epoch', 'batch']
+        #columns_to_convert = ['loss', 'accuracy', 'epoch', 'batch']
+        columns_to_convert = list(results_df.columns.values)
+        columns_to_convert = [c for c in columns_to_convert if not c in ['Unnamed: 0', 'optimizer']]
         for opt_name in results_df.optimizer.unique():
             if opt_name == 'optimizer':
                 continue
@@ -48,8 +52,10 @@ for filename in file_list:
 
         # pivot src: https://stackoverflow.com/questions/29233283/plotting-multiple-lines-with-pandas-dataframe#29233885
 
-        # plot each interesting column
-        for col_name in ["loss"]:
+        # plot each interestng column
+        mdf_col = master_df.columns.values
+        plot_cols = [c for c in mdf_col if 'loss' in c]
+        for col_name in plot_cols:
             loss_df = master_df.pivot(index="epoch", columns="optimizer", values=col_name)
             loss_df.plot(ylabel=col_name, title=title_name, logy=True)
             plt.show()
