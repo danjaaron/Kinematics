@@ -13,7 +13,7 @@ pyparsing==2.4.7
 python-dateutil==2.8.1
 pytorch-nlp==0.5.0
 pytz==2020.1
-PyYAML==5.3.1
+PyYAML==5.4
 requests==2.24.0
 sentencepiece==0.1.94
 six==1.15.0
